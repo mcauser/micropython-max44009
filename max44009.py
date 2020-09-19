@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 # registers
 _MAX44009_INT_STATUS  = const(0x00) # Interrupt status
@@ -89,10 +89,10 @@ class MAX44009:
 		# The dodgy way - may contain hi and lo bits of separate sensor reads.
 		# An I2C start condition blocks sensor from updating its registers and an I2C stop condition resumes updates.
 		# If you perform a repeated start transfer, it ensures you're getting bits from the same sensor reading.
-		#self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_HI, self._buf)
+		#self._read8(_MAX44009_LUX_HI)
 		#exponent = self._buf[0] >> 4
 		#mantissa = ((self._buf[0] & 0x0F) << 4)
-		#self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_LO, self._buf)
+		#self._read8(_MAX44009_LUX_LO)
 		#mantissa |= (self._buf[0] & 0x0F)
 		#return self._exponent_mantissa_to_lux(exponent, mantissa)
 
@@ -114,27 +114,24 @@ class MAX44009:
 	def lux_fast(self):
 		# Faster but slightly less accurate version
 		# Only hitting the lux hi bits register
-		self._buf[0] = _MAX44009_LUX_HI
-		self._i2c.writeto(self._address, self._buf, False)
-		self._i2c.readfrom_into(self._address, self._buf)
+		self._read8(_MAX44009_LUX_HI)
 		exponent = self._buf[0] >> 4
 		mantissa = ((self._buf[0] & 0x0F) << 4)
 		return self._exponent_mantissa_to_lux(exponent, mantissa)
 
 	@property
 	def int_status(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_INT_STATUS, self._buf)
+		self._read8(_MAX44009_INT_STATUS)
 		return self._buf[0] & 1
 
 	@property
 	def int_enable(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_INT_ENABLE, self._buf)
+		self._read8(_MAX44009_INT_ENABLE)
 		return self._buf[0] & 1
 
 	@int_enable.setter
 	def int_enable(self, en):
-		self._buf[0] = en & 1
-		self._i2c.writeto_mem(self._address, _MAX44009_INT_ENABLE, self._buf)
+		self._write8(_MAX44009_INT_ENABLE, en & 1)
 
 	@property
 	def upper_threshold(self):
@@ -154,22 +151,28 @@ class MAX44009:
 
 	@property
 	def threshold_timer(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_THRES_TIMER, self._buf)
+		self._read8(_MAX44009_THRES_TIMER)
 		return self._buf[0] * 100
 
 	@threshold_timer.setter
 	def threshold_timer(self, ms):
 		# range 0 - 25500 ms (0 - 25.5 sec)
 		assert 0 <= ms <= 25500
-		self._buf[0] = int(ms) // 100
-		self._i2c.writeto_mem(self._address, _MAX44009_THRES_TIMER, self._buf)
+		self._write8(_MAX44009_THRES_TIMER, int(ms) // 100)
+
+	def _read8(self, reg):
+		self._i2c.readfrom_mem_into(self._address, reg, self._buf)
+		return self._buf[0]
+
+	def _write8(self, reg, val):
+		self._buf[0] = val
+		self._i2c.writeto_mem(self._address, reg, self._buf)
 
 	def _write_config(self):
-		self._buf[0] = self._config
-		self._i2c.writeto_mem(self._address, _MAX44009_CONFIG, self._buf)
+		self._write8(_MAX44009_CONFIG, self._config)
 
 	def _read_config(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_CONFIG, self._buf)
+		self._read8(_MAX44009_CONFIG)
 		self._config = self._buf[0]
 
 	def _lux_to_exponent_mantissa(self, lux):
@@ -184,7 +187,7 @@ class MAX44009:
 		return (2 ** exponent) * mantissa * 0.045
 
 	def _get_threshold(self, reg, bonus_mantissa):
-		self._i2c.readfrom_mem_into(self._address, reg, self._buf)
+		self._read8(reg)
 		exponent = self._buf[0] >> 4
 		mantissa = ((self._buf[0] & 0x0F) << 4) | bonus_mantissa
 		return self._exponent_mantissa_to_lux(exponent, mantissa)
@@ -193,5 +196,4 @@ class MAX44009:
 		(exponent, mantissa) = self._lux_to_exponent_mantissa(lux)
 		assert 0 <= exponent <= 14
 		assert 0 <= mantissa <= 255
-		self._buf[0] = (exponent << 4) | (mantissa >> 4)
-		self._i2c.writeto_mem(self._address, reg, self._buf)
+		self._write8(reg, (exponent << 4) | (mantissa >> 4))
