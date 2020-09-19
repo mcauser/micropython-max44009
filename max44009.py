@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 # registers
 _MAX44009_INT_STATUS  = const(0x00) # Interrupt status
@@ -60,6 +60,7 @@ class MAX44009:
 		self._buf[0] = self._config
 		self._i2c.writeto_mem(self._address, _MAX44009_CONFIG, self._buf)
 
+	@property
 	def lux(self):
 		# The dodgy way - may contain hi and lo bits of separate sensor reads.
 		# An I2C start condition blocks sensor from updating its registers and an I2C stop condition resumes updates.
@@ -85,6 +86,7 @@ class MAX44009:
 		mantissa |= (self._buf[0] & 0x0F)
 		return self._exponent_mantissa_to_lux(exponent, mantissa)
 
+	@property
 	def lux_fast(self):
 		# Faster but slightly less accurate version
 		# Only hitting the lux hi bits register
@@ -95,36 +97,46 @@ class MAX44009:
 		mantissa = ((self._buf[0] & 0x0F) << 4)
 		return self._exponent_mantissa_to_lux(exponent, mantissa)
 
+	@property
 	def int_status(self):
 		self._i2c.readfrom_mem_into(self._address, _MAX44009_INT_STATUS, self._buf)
 		return self._buf[0] & 1
 
+	@property
 	def int_enable(self):
 		self._i2c.readfrom_mem_into(self._address, _MAX44009_INT_ENABLE, self._buf)
 		return self._buf[0] & 1
 
-	def set_int_enable(self, en):
+	@int_enable.setter
+	def int_enable(self, en):
 		self._buf[0] = en & 1
 		self._i2c.writeto_mem(self._address, _MAX44009_INT_ENABLE, self._buf)
 
+	@property
 	def upper_threshold(self):
 		return self._get_threshold(_MAX44009_UP_THRES, 15)
 
-	def set_upper_threshold(self, lux):
+	@upper_threshold.setter
+	def upper_threshold(self, lux):
 		self._set_threshold(_MAX44009_UP_THRES, lux)
 
+	@property
 	def lower_threshold(self):
 		return self._get_threshold(_MAX44009_LO_THRES, 0)
 
-	def set_lower_threshold(self, lux):
+	@lower_threshold.setter
+	def lower_threshold(self, lux):
 		self._set_threshold(_MAX44009_LO_THRES, lux)
 
+	@property
 	def threshold_timer(self):
 		self._i2c.readfrom_mem_into(self._address, _MAX44009_THRES_TIMER, self._buf)
 		return self._buf[0] * 100
 
-	def set_threshold_timer(self, ms):
+	@threshold_timer.setter
+	def threshold_timer(self, ms):
 		# range 0 - 25500 ms (0 - 25.5 sec)
+		assert 0 <= ms <= 25500
 		self._buf[0] = int(ms) // 100
 		self._i2c.writeto_mem(self._address, _MAX44009_THRES_TIMER, self._buf)
 
@@ -147,5 +159,7 @@ class MAX44009:
 
 	def _set_threshold(self, reg, lux):
 		(exponent, mantissa) = self._lux_to_exponent_mantissa(lux)
+		assert 0 <= exponent <= 14
+		assert 0 <= mantissa <= 255
 		self._buf[0] = (exponent << 4) | (mantissa >> 4)
 		self._i2c.writeto_mem(self._address, reg, self._buf)
