@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 # registers
 _MAX44009_INT_STATUS  = const(0x00) # Interrupt status
@@ -69,19 +69,21 @@ class MAX44009:
 		#mantissa = ((self._buf[0] & 0x0F) << 4)
 		#self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_LO, self._buf)
 		#mantissa |= (self._buf[0] & 0x0F)
-		#return ((2 ** exponent) * mantissa) * 0.045
+		#return self._exponent_mantissa_to_lux(exponent, mantissa)
 
 		# The correct way - repeated start reads of the lux hi and lux lo registers.
 		# First 3 writes/reads block sending the I2C stop condition.
 		# Last read sends the stop condition after its done, allowing the sensor to resume populating the registers.
-		self._i2c.writeto(self._address, bytearray([_MAX44009_LUX_HI]), False)
+		self._buf[0] = _MAX44009_LUX_HI
+		self._i2c.writeto(self._address, self._buf, False)
 		self._i2c.readfrom_into(self._address, self._buf, False)
 		exponent = self._buf[0] >> 4
 		mantissa = ((self._buf[0] & 0x0F) << 4)
-		self._i2c.writeto(self._address, bytearray([_MAX44009_LUX_LO]), False)
+		self._buf[0] = _MAX44009_LUX_LO
+		self._i2c.writeto(self._address, self._buf, False)
 		self._i2c.readfrom_into(self._address, self._buf, True)
 		mantissa |= (self._buf[0] & 0x0F)
-		return ((2 ** exponent) * mantissa) * 0.045
+		return self._exponent_mantissa_to_lux(exponent, mantissa)
 
 	def lux_fast(self):
 		# Faster but slightly less accurate version
@@ -91,7 +93,7 @@ class MAX44009:
 		self._i2c.readfrom_into(self._address, self._buf)
 		exponent = self._buf[0] >> 4
 		mantissa = ((self._buf[0] & 0x0F) << 4)
-		return ((2 ** exponent) * mantissa) * 0.045
+		return self._exponent_mantissa_to_lux(exponent, mantissa)
 
 	def int_status(self):
 		self._i2c.readfrom_mem_into(self._address, _MAX44009_INT_STATUS, self._buf)
@@ -106,32 +108,23 @@ class MAX44009:
 		self._i2c.writeto_mem(self._address, _MAX44009_INT_ENABLE, self._buf)
 
 	def upper_threshold(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_UP_THRES, self._buf)
-		exponent = self._buf[0] >> 4
-		mantissa = ((self._buf[0] & 0x0F) << 4) | 15
-		return ((2 ** exponent) * mantissa) * 0.045
+		return self._get_threshold(_MAX44009_UP_THRES, 15)
 
 	def set_upper_threshold(self, lux):
-		(exponent, mantissa) = self._lux_to_exponent_mantissa(lux)
-		self._buf[0] = (exponent << 4) | (mantissa >> 4)
-		self._i2c.writeto_mem(self._address, _MAX44009_UP_THRES, self._buf)
+		self._set_threshold(_MAX44009_UP_THRES, lux)
 
 	def lower_threshold(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_LO_THRES, self._buf)
-		exponent = self._buf[0] >> 4
-		mantissa = ((self._buf[0] & 0x0F) << 4)
-		return ((2 ** exponent) * mantissa) * 0.045
+		return self._get_threshold(_MAX44009_LO_THRES, 0)
 
 	def set_lower_threshold(self, lux):
-		(exponent, mantissa) = self._lux_to_exponent_mantissa(lux)
-		self._buf[0] = (exponent << 4) | (mantissa >> 4)
-		self._i2c.writeto_mem(self._address, _MAX44009_LO_THRES, self._buf)
+		self._set_threshold(_MAX44009_LO_THRES, lux)
 
 	def threshold_timer(self):
 		self._i2c.readfrom_mem_into(self._address, _MAX44009_THRES_TIMER, self._buf)
 		return self._buf[0] * 100
 
 	def set_threshold_timer(self, ms):
+		# range 0 - 25500 ms (0 - 25.5 sec)
 		self._buf[0] = int(ms) // 100
 		self._i2c.writeto_mem(self._address, _MAX44009_THRES_TIMER, self._buf)
 
@@ -142,3 +135,17 @@ class MAX44009:
 			mantissa >>= 1
 			exponent += 1
 		return (exponent, mantissa)
+
+	def _exponent_mantissa_to_lux(self, exponent, mantissa):
+		return (2 ** exponent) * mantissa * 0.045
+
+	def _get_threshold(self, reg, bonus_mantissa):
+		self._i2c.readfrom_mem_into(self._address, reg, self._buf)
+		exponent = self._buf[0] >> 4
+		mantissa = ((self._buf[0] & 0x0F) << 4) | bonus_mantissa
+		return self._exponent_mantissa_to_lux(exponent, mantissa)
+
+	def _set_threshold(self, reg, lux):
+		(exponent, mantissa) = self._lux_to_exponent_mantissa(lux)
+		self._buf[0] = (exponent << 4) | (mantissa >> 4)
+		self._i2c.writeto_mem(self._address, reg, self._buf)
