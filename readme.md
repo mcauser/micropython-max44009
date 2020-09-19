@@ -7,7 +7,20 @@ i2c = I2C(scl=Pin(22), sda=Pin(21))
 
 sensor = max44009.MAX44009(i2c)
 
-sensor.config(continuous=0, manual=0, current_division_ratio=0, integration_time=3)
+sensor.continuous
+0
+
+sensor.continuous = 1
+
+sensor.manual = 0
+
+sensor.current_division_ratio = 0
+
+sensor.integration_time = 3
+
+sensor._read_config()
+sensor._config
+131
 
 sensor.lux
 136.8

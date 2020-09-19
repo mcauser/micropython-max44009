@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 # registers
 _MAX44009_INT_STATUS  = const(0x00) # Interrupt status
@@ -48,17 +48,41 @@ class MAX44009:
 		if self._i2c.scan().count(self._address) == 0:
 			raise OSError('MAX44009 not found at I2C address {:#x}'.format(self._address))
 
-	def config(self, continuous=None, manual=None, current_division_ratio=None, integration_time=None):
-		if continuous is not None:
-			self._config = (self._config & ~128) | ((continuous << 7) & 128)
-		if manual is not None:
-			self._config = (self._config & ~64) | ((manual << 6) & 64)
-		if current_division_ratio is not None:
-			self._config = (self._config & ~8) | ((current_division_ratio << 3) & 8)
-		if integration_time is not None:
-			self._config = (self._config & ~7) | (integration_time & 7)
-		self._buf[0] = self._config
-		self._i2c.writeto_mem(self._address, _MAX44009_CONFIG, self._buf)
+	@property
+	def continuous(self):
+		return (self._config >> 7) & 1
+
+	@continuous.setter
+	def continuous(self, on):
+		self._config = (self._config & ~128) | ((on << 7) & 128)
+		self._write_config()
+
+	@property
+	def manual(self):
+		return (self._config >> 6) & 1
+
+	@manual.setter
+	def manual(self, on):
+		self._config = (self._config & ~64) | ((on << 6) & 64)
+		self._write_config()
+
+	@property
+	def current_division_ratio(self):
+		return (self._config >> 3) & 1
+
+	@current_division_ratio.setter
+	def current_division_ratio(self, divide_by_8):
+		self._config = (self._config & ~8) | ((divide_by_8 << 3) & 8)
+		self._write_config()
+
+	@property
+	def integration_time(self):
+		return self._config & 7
+
+	@integration_time.setter
+	def integration_time(self, time):
+		self._config = (self._config & ~7) | (time & 7)
+		self._write_config()
 
 	@property
 	def lux(self):
@@ -139,6 +163,14 @@ class MAX44009:
 		assert 0 <= ms <= 25500
 		self._buf[0] = int(ms) // 100
 		self._i2c.writeto_mem(self._address, _MAX44009_THRES_TIMER, self._buf)
+
+	def _write_config(self):
+		self._buf[0] = self._config
+		self._i2c.writeto_mem(self._address, _MAX44009_CONFIG, self._buf)
+
+	def _read_config(self):
+		self._i2c.readfrom_mem_into(self._address, _MAX44009_CONFIG, self._buf)
+		self._config = self._buf[0]
 
 	def _lux_to_exponent_mantissa(self, lux):
 		mantissa = int(lux * 1000) // 45
