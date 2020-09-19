@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 # registers
 _MAX44009_INT_STATUS  = const(0x00) # Interrupt status
@@ -61,11 +61,36 @@ class MAX44009:
 		self._i2c.writeto_mem(self._address, _MAX44009_CONFIG, self._buf)
 
 	def lux(self):
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_HI, self._buf)
+		# The dodgy way - may contain hi and lo bits of separate sensor reads.
+		# An I2C start condition blocks sensor from updating its registers and an I2C stop condition resumes updates.
+		# If you perform a repeated start transfer, it ensures you're getting bits from the same sensor reading.
+		#self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_HI, self._buf)
+		#exponent = self._buf[0] >> 4
+		#mantissa = ((self._buf[0] & 0x0F) << 4)
+		#self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_LO, self._buf)
+		#mantissa |= (self._buf[0] & 0x0F)
+		#return ((2 ** exponent) * mantissa) * 0.045
+
+		# The correct way - repeated start reads of the lux hi and lux lo registers.
+		# First 3 writes/reads block sending the I2C stop condition.
+		# Last read sends the stop condition after its done, allowing the sensor to resume populating the registers.
+		self._i2c.writeto(self._address, bytearray([_MAX44009_LUX_HI]), False)
+		self._i2c.readfrom_into(self._address, self._buf, False)
 		exponent = self._buf[0] >> 4
 		mantissa = ((self._buf[0] & 0x0F) << 4)
-		self._i2c.readfrom_mem_into(self._address, _MAX44009_LUX_LO, self._buf)
+		self._i2c.writeto(self._address, bytearray([_MAX44009_LUX_LO]), False)
+		self._i2c.readfrom_into(self._address, self._buf, True)
 		mantissa |= (self._buf[0] & 0x0F)
+		return ((2 ** exponent) * mantissa) * 0.045
+
+	def lux_fast(self):
+		# Faster but slightly less accurate version
+		# Only hitting the lux hi bits register
+		self._buf[0] = _MAX44009_LUX_HI
+		self._i2c.writeto(self._address, self._buf, False)
+		self._i2c.readfrom_into(self._address, self._buf)
+		exponent = self._buf[0] >> 4
+		mantissa = ((self._buf[0] & 0x0F) << 4)
 		return ((2 ** exponent) * mantissa) * 0.045
 
 	def int_status(self):
