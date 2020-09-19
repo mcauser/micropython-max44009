@@ -3,7 +3,7 @@ MicroPython MAX44009 Ambient Light Sensor
 https://github.com/mcauser/micropython-max44009
 
 MIT License
-Copyright (c) 2019 Mike Causer
+Copyright (c) 2020 Mike Causer
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

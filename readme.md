@@ -1,4 +1,6 @@
-MicroPython MAX44009 Ambient Light Sensor
+# MicroPython MAX44009 Ambient Light Sensor
+
+A MicroPython driver for the MAX44009 ambient light sensor with I2C Interface.
 
 ```
 import max44009
@@ -51,3 +53,9 @@ sensor.threshold_timer
 
 sensor.threshold_timer = 1000
 ```
+
+## License
+
+Licensed under the [MIT License](http://opensource.org/licenses/MIT).
+
+Copyright (c) 2020 Mike Causer
