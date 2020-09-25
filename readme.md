@@ -2,6 +2,8 @@
 
 A MicroPython driver for the MAX44009 ambient light sensor with I2C Interface.
 
+![demo](docs/demo.jpg)
+
 ```
 import max44009
 from machine import I2C, Pin
